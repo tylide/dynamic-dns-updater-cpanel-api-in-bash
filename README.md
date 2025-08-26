@@ -29,8 +29,7 @@ A **Dynamic DNS Updater for cPanel** is a Bash script that automatically updates
    DOMAIN=your-domain
    TTL=300
    GET_IP_URL=checkip.amazonaws.com
-   DNAME=subdomain
-   LINDEX=line-index
+   SUBDOMAIN=subdomain
    ```
 
 3. **Make the Script Executable**:
