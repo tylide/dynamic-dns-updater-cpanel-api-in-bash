@@ -8,19 +8,19 @@ else
 fi
 
 function get_ip() {
-    curl $GET_IP_URL 2> /dev/null
+    curl -s $GET_IP_URL
 }
 
 function domain_current_ip() {
     local DOMAIN=$1
-    local resposta=$(curl -H "Authorization: cpanel $USERNAME:$APIKEY" "$CPANEL_URL:$CPANEL_PORT/execute/DNS/lookup" -d "domain=$DOMAIN" 2> /dev/null)
+    local resposta=$(curl -s -H "Authorization: cpanel $USERNAME:$APIKEY" "$CPANEL_URL:$CPANEL_PORT/execute/DNS/lookup" -d "domain=$DOMAIN")
     
     echo $resposta | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' -o
 }
 
 function last_serial() {
-    curl -H "Authorization: cpanel $USERNAME:$APIKEY" \
-        "$CPANEL_URL:$CPANEL_PORT/execute/DNS/parse_zone?zone=$DOMAIN" 2> /dev/null \
+    curl -s -H "Authorization: cpanel $USERNAME:$APIKEY" \
+        "$CPANEL_URL:$CPANEL_PORT/execute/DNS/parse_zone?zone=$DOMAIN" \
         | jq '.data[3].data_b64[2]' \
         | sed 's/\"//g' \
         | base64 -d
@@ -38,7 +38,7 @@ function update_domain_ip() {
     
     json="{\"line_index\": $line_index, \"dname\":\"$dname\", \"ttl\":$ttl, \"record_type\":\"A\", \"data\":[\"$ip\"]}"
 
-    resposta=$(curl -H "Authorization: cpanel $USERNAME:$APIKEY" "$CPANEL_URL:$CPANEL_PORT/execute/DNS/mass_edit_zone" -d "zone=$DOMAIN" -d "serial=$serial" -d "edit=$json" 2> /dev/null)
+    resposta=$(curl -s -H "Authorization: cpanel $USERNAME:$APIKEY" "$CPANEL_URL:$CPANEL_PORT/execute/DNS/mass_edit_zone" -d "zone=$DOMAIN" -d "serial=$serial" -d "edit=$json")
 
     status=$(echo $resposta | jq '.status')
 
