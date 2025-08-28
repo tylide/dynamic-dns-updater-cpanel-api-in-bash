@@ -30,6 +30,9 @@ A **Dynamic DNS Updater for cPanel** is a Bash script that automatically updates
    TTL=300
    GET_IP_URL=checkip.amazonaws.com
    SUBDOMAIN=subdomain
+   NTFY_SERVER=https://ntfy.sh
+   NTFY_TOPIC=dnsupdate
+   NTFY_TOKEN=tk_my_ntfy_token
    ```
 
 3. **Make the Script Executable**:
