@@ -252,20 +252,16 @@ fi
 if [[ $operation == add ]] || [[ ! -z $update ]]; then
     touch "$LOCK_FILE"
     change_zone "$operation" "$record" "$last_serial"
-    sleep 360
-    current_ip=$(get_domain_ip $SUBDOMAIN.$DOMAIN)
-    if [[ "$public_ip" == "$domain_ip" ]]; then
-        if [[ $operation == add ]]; then
-            title="New subdomain added"
-            tags="heavy_plus_sign"
-        else
-            title="Subdomain updated"
-            tags="up"
-        fi
-        ntfy "$title" "hight" "$tags" "Subdomain: $SUBDOMAIN on IP: $public_ip"
+
+    if [[ $operation == add ]]; then
+        title="New subdomain added"
+        tags="heavy_plus_sign"
     else
-        ntfy "Verify DNS error" "max" "warning" "Public IP '$public_ip' and $SUBDOMAIN.$DOMAIN '$current_ip' are not the same."
-    fi 
+        title="Subdomain updated"
+        tags="up"
+    fi
+
+    ntfy "$title" "hight" "$tags" "Subdomain: $SUBDOMAIN on IP: $public_ip"
     rm "$LOCK_FILE"
 fi
 
