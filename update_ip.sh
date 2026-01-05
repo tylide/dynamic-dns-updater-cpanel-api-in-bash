@@ -164,7 +164,7 @@ function last_serial() {
 
 function change_zone() {
     local json resposta status error serial correct_serial operation operations
-    operations='{"operations": ["add", "edit"]}'
+    operations_json='{"operations": ["add", "edit"]}'
     operation=$1
 
     if ! echo "$operations_json" | jq -e --arg op "$operation" '.operations | index($op)' > /dev/null; then
