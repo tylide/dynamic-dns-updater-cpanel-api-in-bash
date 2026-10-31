@@ -111,7 +111,7 @@ type Found struct {
 }
 
 // FindRecord matches subdomain against zone data.
-// Accepts short ("homeip") or FQDN ("homeip.darktdo.pt", with/without dot).
+// Accepts short ("homeip") or FQDN ("homeip.exemplo.pt", with/without dot).
 func FindRecord(records []ZoneRecord, subdomain, domain string) (*Found, error) {
 	cands := candidates(subdomain, domain)
 	for _, r := range records {
