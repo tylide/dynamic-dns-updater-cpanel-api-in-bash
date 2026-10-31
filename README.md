@@ -1,80 +1,136 @@
-A **Dynamic DNS Updater for cPanel** is a Bash script that automatically updates your DNS records on cPanel whenever your public IP address changes. This tool is particularly useful for users with dynamic IP addresses who want to ensure their domain always points to the correct IP. The script retrieves the current public IP, checks it against the existing DNS record, and updates the record if there is a discrepancy.
+# Dynamic DNS Updater for cPanel (Go)
 
-### Installation and Usage Guide
+Single static binary that keeps a cPanel DNS `A` record in sync with your
+public IP. No `curl`/`jq`/`dig` needed at runtime — just the binary and a
+`.env` file.
 
-#### Prerequisites
+## How it works
 
-- A cPanel account with API access.
-- `curl` and `jq` installed on your system.
-- A `.env` file containing your cPanel credentials and configuration.
+1. Gets the public IP trying each provider in order
+   (`checkip.amazonaws.com` → `ifconfig.me/ip` → `icanhazip.com` →
+   `api.ipify.org`), first valid answer wins.
+2. Short-circuit: if the IP is unchanged since the last successful sync
+   (see `state.json`), it exits without hitting the cPanel API. A periodic
+   `force-refresh` (default 1h) re-checks anyway to catch manual edits.
+3. Source of truth is always the **cPanel API** (`parse_zone`), never local
+   DNS (avoids cache/propagation false positives). If the zone IP differs,
+   it calls `mass_edit_zone` (`add` when missing, `edit` otherwise).
+4. Lock file prevents overlapping runs; stale locks (>10 min) expire.
+5. Optional `ntfy` notification on change/failure (disabled when unconfigured).
 
-#### Installation Steps
+## Requirements
 
-1. **Clone the Repository**:
-   Open your terminal and run the following command to clone the repository:
+- cPanel account with UAPI/DNS access.
+- Go 1.24+ **only to build** — or use a prebuilt binary (see below).
+- `update_ip.sh` keeps the old cron path working: it compiles `./dnsupdater`
+  on first run (or when sources change) and delegates to it.
 
-   ```bash
-   git clone https://github.com/tylide/dynamic-dns-updater-cpanel-api-in-bash.git
-   cd dynamic-dns-updater-cpanel-api-in-bash
-   ```
-
-2. **Create a `.env` File**:
-   Create a `.env` file in the root directory of the cloned repository and add your cPanel configuration:
-
-   ```plaintext
-   CPANEL_URL=https://your-cpanel-url
-   CPANEL_PORT=2083
-   USERNAME=your-username
-   APIKEY=your-api-key
-   DOMAIN=your-domain
-   TTL=300
-   GET_IP_URL=checkip.amazonaws.com
-   SUBDOMAIN=subdomain
-   NTFY_SERVER=https://ntfy.sh
-   NTFY_TOPIC=dnsupdate
-   NTFY_TOKEN=tk_my_ntfy_token
-   ```
-
-3. **Make the Script Executable**:
-   Change the permissions of the script to make it executable:
-
-   ```bash
-   chmod +x update_ip.sh
-   ```
-
-#### Usage
-
-To run the script manually, execute the following command in your terminal:
+## Install
 
 ```bash
-./update_ip.sh
+git clone <repo-url>
+cd dnsupdater
+cp .env.example .env   # edit with your values
 ```
 
-#### Automating with Cron
+Build:
 
-To ensure that your DNS records are updated automatically, you can set up a cron job:
+```bash
+go build -trimpath -ldflags="-s -w" -o dnsupdater ./cmd/dnsupdater
+# or
+make build
+# or simply: ./update_ip.sh --dry-run   # shim builds automatically
+```
 
-1. **Open the Crontab**:
-   Run the following command to edit your crontab:
+## Configuration (`.env`)
 
-   ```bash
-   crontab -e
-   ```
+| Var | Required | Default | Description |
+| --- | --- | --- | --- |
+| `CPANEL_URL` | yes | – | e.g. `https://cpanel.example.com` |
+| `CPANEL_PORT` | no | `2083` | appended when the URL has no port |
+| `USERNAME` / `APIKEY` | yes | – | cPanel UAPI credentials |
+| `DOMAIN` / `SUBDOMAIN` | yes | – | `SUBDOMAIN` may be short (`homeip`) or FQDN |
+| `TTL` | no | `300` | DNS TTL for add/edit |
+| `GET_IP_URLS` | no | amazon → ifconfig.me → icanhazip → ipify | comma/space separated fallback list (`GET_IP_URL` legacy single still works) |
+| `NTFY_SERVER` / `NTFY_TOPIC` / `NTFY_TOKEN` | no | – | all three or none (none = disabled) |
+| `LOG_FILE` | no | `/var/log/dnsupdater.log` (Unix), `./dnsupdater.log` (Windows) | falls back to local `dnsupdater.log` when unwritable |
+| `STATE_FILE` | no | user cache dir | set explicitly for cron-as-root consistency |
+| `INTERVAL` | no | `5m` | daemon loop interval |
+| `FORCE_REFRESH` | no | `1h` | re-check API even with unchanged IP |
+| `DRY_RUN` / `VERBOSE` | no | `false` | log without changing the zone / mirror INFO to stderr |
 
-2. **Add a Cron Job**:
-   Add the following line to run the script every 5 minutes (adjust the timing as needed):
+Precedence: CLI flags > OS env > `.env` file > defaults.
 
-   ```plaintext
-   */5 * * * * /path/to/your/dynamic-dns-updater-cpanel-api-in-bash/update_ip.sh
-   ```
+## Usage
 
-   Replace `/path/to/your/dynamic-dns-updater-cpanel-api-in-bash/` with the actual path to your script.
+```bash
+./dnsupdater --once                              # single check (cron)
+./dnsupdater --once --dry-run --verbose         # test safely
+./dnsupdater --daemon --interval 5m             # long-running loop
+./dnsupdater --once --force                     # ignore state cache
+./dnsupdater --version
+```
 
-3. **Save and Exit**:
-   Save the changes and exit the editor. Your cron job is now set up!
+Cron stays exactly as before (shim is a drop-in at the same path):
 
-### Conclusion
+```cron
+*/5 * * * * /path/to/dnsupdater/update_ip.sh
+```
 
-The **Dynamic DNS Updater for cPanel** is a simple yet effective solution for keeping your DNS records in sync with your dynamic IP address. With easy installation and automation through cron, you can ensure your domain always points to the correct IP.
+systemd example (`.service` + `.timer` running `--once` every 5 min) and
+Windows (`dnsupdater-windows-*.exe --once` via Task Scheduler) follow the
+same pattern: one-shot execution, no daemon required.
 
-Feel free to contribute to the project or report any issues you encounter!
+## Cross-compile
+
+```bash
+make build-all   # linux/amd64,arm64,armv7 + windows/amd64,arm64 + darwin/amd64,arm64
+```
+
+Binaries + `sha256sums.txt` land in `dist/`. On Raspberry Pi just `git pull`
+and run `./update_ip.sh` — it natively compiles for the local arch.
+
+## Logging
+
+- Active log: `LOG_FILE` (default `/var/log/dnsupdater.log`).
+- No permission / no `/var` (Windows) → local `./dnsupdater.log` next to the
+  binary, with a warning.
+- When the log lives under `/var`, a `dnsupdater.log` symlink is created in
+  the app dir for convenience (`*.log` is gitignored).
+- Rotation at 10 MB (`dnsupdater.log.1`); see `contrib/dnsupdater.logrotate`
+  for a `logrotate` alternative (`sudo cp contrib/dnsupdater.logrotate
+  /etc/logrotate.d/dnsupdater`).
+- First run as non-root: `sudo touch /var/log/dnsupdater.log &&
+  sudo chown $USER /var/log/dnsupdater.log`, or set `LOG_FILE` to a writable
+  path.
+
+## State & lock
+
+- `state.json` (user cache by default): last public/zone IP + timestamp.
+  Delete it or pass `--force` to force a full API check.
+- `.lock_update` next to the binary prevents overlaps; remove it manually if
+  a stale lock error persists after a crash (auto-expires after 10 min).
+
+## Troubleshooting
+
+| Symptom | Cause / fix |
+| --- | --- |
+| `parse_zone HTTP 403: Access denied` | API key invalid/expired or IP not allowlisted in cPanel; rotate key, check UAPI perms |
+| `todos os providers falharam` | no outbound HTTP; check proxy/firewall (uses `HTTP(S)_PROXY`) |
+| `locked (... existe ...)` | previous run crashed; lock auto-expires in 10 min or delete `.lock_update` |
+| `ntfy parcial` | set all three `NTFY_*` or none |
+| shim says `go build falhou` | install Go or copy a `dist/` binary to `./dnsupdater` |
+
+## Legacy
+
+The original Bash implementation is kept at `update_ip.bash.legacy` for
+reference. `update_ip.sh` is now a compatibility shim (same path, same
+`.env`), not the updater itself.
+
+## Development
+
+```bash
+go vet ./...
+go test ./... -count=1
+go test ./... -cover
+```
