@@ -23,47 +23,39 @@ log_line() {
     fi
 }
 
-# Migra .env legado (chaves sem prefixo) para DNSUPDATER_*.
-# Idempotente: só acrescenta o que falta, nunca apaga; backup em .env.bak
-# à primeira migração. O binário lê ambos, por isso é seguro.
+# Migra .env legado (chaves sem prefixo) para DNSUPDATER_* por substituição.
+# Idempotente: sem chaves legadas, não toca em nada. Com backup em .env.bak
+# antes de alterar. Se a prefixada já existir, a legada é removida
+# (o loader prefere sempre a prefixada, por isso nada muda). O binário lê
+# ambos os formatos, por isso a migração é segura.
 migrate_env() {
     local envfile="$DIR/.env"
     [ -f "$envfile" ] || return 0
     [ -w "$envfile" ] || return 0
-    local pair legacy prefixed rhs added=0
-    for pair in \
-        "CPANEL_URL:DNSUPDATER_CPANEL_URL" \
-        "CPANEL_PORT:DNSUPDATER_CPANEL_PORT" \
-        "USERNAME:DNSUPDATER_USERNAME" \
-        "APIKEY:DNSUPDATER_APIKEY" \
-        "DOMAIN:DNSUPDATER_DOMAIN" \
-        "TTL:DNSUPDATER_TTL" \
-        "GET_IP_URL:DNSUPDATER_GET_IP_URL" \
-        "GET_IP_URLS:DNSUPDATER_GET_IP_URLS" \
-        "SUBDOMAIN:DNSUPDATER_SUBDOMAIN" \
-        "NTFY_SERVER:DNSUPDATER_NTFY_SERVER" \
-        "NTFY_TOPIC:DNSUPDATER_NTFY_TOPIC" \
-        "NTFY_TOKEN:DNSUPDATER_NTFY_TOKEN" \
-        "LOG_FILE:DNSUPDATER_LOG_FILE" \
-        "STATE_FILE:DNSUPDATER_STATE_FILE" \
-        "INTERVAL:DNSUPDATER_INTERVAL" \
-        "FORCE_REFRESH:DNSUPDATER_FORCE_REFRESH" \
-        "DRY_RUN:DNSUPDATER_DRY_RUN" \
-        "VERBOSE:DNSUPDATER_VERBOSE" ; do
-        legacy="${pair%%:*}"
-        prefixed="${pair##*:}"
-        grep -Eq "^[[:space:]]*(export[[:space:]]+)?${prefixed}=" "$envfile" && continue
-        rhs="$(grep -E "^[[:space:]]*(export[[:space:]]+)?${legacy}=" "$envfile" 2>/dev/null | tail -n1 | sed -E "s/^[[:space:]]*(export[[:space:]]+)?${legacy}=//")"
-        [ -n "${rhs:-}" ] || continue
-        if [ "$added" -eq 0 ]; then
-            cp -a "$envfile" "$envfile.bak" 2>/dev/null || true
-        fi
-        printf '%s=%s\n' "$prefixed" "$rhs" >> "$envfile" || return 0
-        added=1
-    done
-    if [ "$added" -eq 1 ]; then
-        log_line "migrado .env para chaves DNSUPDATER_* (backup em $envfile.bak)" "$LOGFILE"
-    fi
+    local legacy_re="^[[:space:]]*(export[[:space:]]+)?(CPANEL_URL|CPANEL_PORT|USERNAME|APIKEY|DOMAIN|TTL|GET_IP_URLS?|SUBDOMAIN|NTFY_SERVER|NTFY_TOPIC|NTFY_TOKEN|LOG_FILE|STATE_FILE|INTERVAL|FORCE_REFRESH|DRY_RUN|VERBOSE)="
+    grep -Eq "$legacy_re" "$envfile" || return 0
+    cp -a "$envfile" "$envfile.bak" 2>/dev/null || cp "$envfile" "$envfile.bak" 2>/dev/null || return 0
+    local tmp line key prefixed new_line
+    tmp="$(mktemp "${TMPDIR:-/tmp}/dnsupdater-env.XXXXXX")" || return 0
+    while IFS= read -r line || [ -n "$line" ]; do
+        key="$(printf '%s' "$line" | sed -E 's/^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)=.*/\2/;t;d')"
+        case "$key" in
+            CPANEL_URL|CPANEL_PORT|USERNAME|APIKEY|DOMAIN|TTL|GET_IP_URL|GET_IP_URLS|SUBDOMAIN|NTFY_SERVER|NTFY_TOPIC|NTFY_TOKEN|LOG_FILE|STATE_FILE|INTERVAL|FORCE_REFRESH|DRY_RUN|VERBOSE)
+                prefixed="DNSUPDATER_$key"
+                if grep -Eq "^[[:space:]]*(export[[:space:]]+)?${prefixed}=" "$envfile"; then
+                    continue
+                fi
+                new_line="$(printf '%s' "$line" | sed -E "s/^([[:space:]]*(export[[:space:]]+)?)${key}=/\1${prefixed}=/")"
+                printf '%s\n' "$new_line" >> "$tmp"
+                ;;
+            *)
+                printf '%s\n' "$line" >> "$tmp"
+                ;;
+        esac
+    done < "$envfile"
+    cat "$tmp" > "$envfile"
+    rm -f "$tmp"
+    log_line "migrado .env para chaves DNSUPDATER_* (backup em $envfile.bak)" "$LOGFILE"
 }
 
 # LOG_FILE: flag --log-file tem prioridade, depois .env, senão default.

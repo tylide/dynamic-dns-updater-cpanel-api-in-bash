@@ -47,8 +47,8 @@ make build
 Canonical names use the `DNSUPDATER_` prefix so they never collide with
 system vars (e.g. `USERNAME`, always set on Windows). Legacy bare names
 (`CPANEL_URL`, `USERNAME`, …) still work **in the file**; the `update_ip.sh`
-shim adds the prefixed form automatically when missing. The OS environment
-is only read with the prefix.
+shim renames them to `DNSUPDATER_*` in place on first run (backup in
+`.env.bak`). The OS environment is only read with the prefix.
 
 | Var | Required | Default | Description |
 | --- | --- | --- | --- |
