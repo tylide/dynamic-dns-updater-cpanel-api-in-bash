@@ -1,1 +1,7 @@
 .env
+/dnsupdater
+/dnsupdater.exe
+/dist/
+/.lock_update
+*.log
+state.json
