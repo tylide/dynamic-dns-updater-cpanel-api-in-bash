@@ -1,5 +1,10 @@
 # Dynamic DNS Updater for cPanel (Go)
 
+> **Nota:** a partir da `v1.0.0` o programa foi **refatorado de Bash para Go**
+> — já não é apenas Bash. O binário `dnsupdater` é o atualizador; o
+> `update_ip.sh` é só um shim compatível (compila e delega) e o Bash original
+> está preservado em `update_ip.bash.legacy`.
+
 Single static binary that keeps a cPanel DNS `A` record in sync with your
 public IP. No `curl`/`jq`/`dig` needed at runtime — just the binary and a
 `.env` file.
