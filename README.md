@@ -89,6 +89,34 @@ Cron stays exactly as before (shim is a drop-in at the same path):
 */5 * * * * /path/to/dnsupdater/update_ip.sh
 ```
 
+### Running as a service
+
+**Linux (systemd, recomendado em vez de cron):**
+
+```bash
+sudo install -m 0755 dist/dnsupdater-linux-amd64 /usr/local/bin/dnsupdater
+sudo mkdir -p /etc/dnsupdater
+sudo install -m 0600 .env /etc/dnsupdater/.env
+sudo install -m 0644 contrib/dnsupdater.service contrib/dnsupdater.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now dnsupdater.timer
+systemctl list-timers dnsupdater.timer   # confirma agendamento
+journalctl -u dnsupdater.service -e      # últimas runs (detalhe em /var/log/dnsupdater.log)
+```
+
+O timer corre `--once` de 5 em 5 min (`OnUnitActiveSec`). Alternativa com
+daemon permanente: `ExecStart=/usr/local/bin/dnsupdater --daemon` com
+`Restart=always` — o timer acima é preferível (sem processo residente).
+
+**Windows (Task Scheduler, a cada 5 min como SYSTEM):**
+
+```cmd
+schtasks /Create /TN "DNSUpdater" /TR "C:\dnsupdater\dnsupdater-windows-amd64.exe --once" /SC MINUTE /MO 5 /RU SYSTEM
+schtasks /Run /TN "DNSUpdater"
+```
+
+O log usa `./dnsupdater.log` junto ao `.exe` (fallback automático no Windows).
+
 systemd example (`.service` + `.timer` running `--once` every 5 min) and
 Windows (`dnsupdater-windows-*.exe --once` via Task Scheduler) follow the
 same pattern: one-shot execution, no daemon required.

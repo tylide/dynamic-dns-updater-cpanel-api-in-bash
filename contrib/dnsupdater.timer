@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Dynamic DNS Updater every 5 minutes
+Documentation=https://github.com/tylide/dynamic-dns-updater-cpanel-api-in-bash
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=5min
+Persistent=true
+Unit=dnsupdater.service
+
+[Install]
+WantedBy=timers.target

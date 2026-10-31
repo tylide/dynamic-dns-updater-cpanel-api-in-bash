@@ -1,0 +1,16 @@
+[Unit]
+Description=Dynamic DNS Updater for cPanel (one-shot)
+Documentation=https://github.com/tylide/dynamic-dns-updater-cpanel-api-in-bash
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+# .env vive em /etc/dnsupdater/.env (o binário lê ./.env do WorkingDirectory).
+WorkingDirectory=/etc/dnsupdater
+ExecStart=/usr/local/bin/dnsupdater --once
+# Overrides opcionais (têm prioridade sobre o .env):
+# Environment=DNSUPDATER_LOG_FILE=/var/log/dnsupdater.log
+# Environment=DNSUPDATER_STATE_FILE=/var/lib/dnsupdater/state.json
+# Ficheiro com mais vars (formato KEY=VAL, precisa de existir ou o "-" ignora):
+# EnvironmentFile=-/etc/dnsupdater/env
