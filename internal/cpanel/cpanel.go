@@ -50,6 +50,10 @@ func New(rawURL string, port int, username, apiKey string) (*Client, error) {
 	}, nil
 }
 
+// userAgent identifica o cliente. Alguns hosts com mod_security/WAF bloqueiam
+// o default "Go-http-client"; o bash antigo passava com o UA do curl.
+const userAgent = "dnsupdater/1.0"
+
 // ZoneRecord is one row of parse_zone data.
 type ZoneRecord struct {
 	DnameB64   string   `json:"dname_b64"`
@@ -77,6 +81,7 @@ func (c *Client) ParseZone(ctx context.Context, domain string) ([]ZoneRecord, er
 		return nil, err
 	}
 	req.Header.Set("Authorization", "cpanel "+c.Username+":"+c.APIKey)
+	req.Header.Set("User-Agent", userAgent)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("parse_zone: %w", err)
@@ -87,6 +92,9 @@ func (c *Client) ParseZone(ctx context.Context, domain string) ([]ZoneRecord, er
 		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			return nil, fmt.Errorf("parse_zone HTTP %d: %s (verifique token, privilégios DNS do token e Host Access Control; se curl funciona, reporte o User-Agent %q ao suporte do host)", resp.StatusCode, trunc(string(body), 200), userAgent)
+		}
 		return nil, fmt.Errorf("parse_zone HTTP %d: %s", resp.StatusCode, trunc(string(body), 200))
 	}
 	var pr parseResp
@@ -179,6 +187,7 @@ func (c *Client) MassEdit(ctx context.Context, domain, serial, operation string,
 	}
 	req.Header.Set("Authorization", "cpanel "+c.Username+":"+c.APIKey)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", userAgent)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return fmt.Errorf("mass_edit_zone: %w", err)

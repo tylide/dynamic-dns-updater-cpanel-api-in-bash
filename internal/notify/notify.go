@@ -25,6 +25,7 @@ func Send(ctx context.Context, server, topic, token, title, priority, tags, mess
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
+	req.Header.Set("User-Agent", "dnsupdater/1.0")
 	if title != "" {
 		req.Header.Set("Title", title)
 	}

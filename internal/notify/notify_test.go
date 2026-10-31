@@ -17,12 +17,13 @@ func TestSendDisabled(t *testing.T) {
 
 // RED: envia headers Title/Priority/Tags + Bearer.
 func TestSendHeaders(t *testing.T) {
-	var gotTitle, gotPriority, gotTags, gotAuth, gotBody string
+	var gotTitle, gotPriority, gotTags, gotAuth, gotBody, gotUA string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotTitle = r.Header.Get("Title")
 		gotPriority = r.Header.Get("Priority")
 		gotTags = r.Header.Get("Tags")
 		gotAuth = r.Header.Get("Authorization")
+		gotUA = r.Header.Get("User-Agent")
 		buf := make([]byte, 1024)
 		n, _ := r.Body.Read(buf)
 		gotBody = string(buf[:n])
@@ -39,6 +40,9 @@ func TestSendHeaders(t *testing.T) {
 	}
 	if gotAuth != "Bearer tk_123" {
 		t.Fatalf("auth = %q", gotAuth)
+	}
+	if gotUA != "dnsupdater/1.0" {
+		t.Fatalf("user-agent = %q", gotUA)
 	}
 	if gotBody != "hello" {
 		t.Fatalf("body = %q", gotBody)
