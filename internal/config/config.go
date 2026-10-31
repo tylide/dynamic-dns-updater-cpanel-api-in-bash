@@ -54,8 +54,12 @@ var DefaultGetIPURLs = []string{
 }
 
 // Load reads .env file + OS env and applies overrides.
+// Precedence per key: CLI flags > DNSUPDATER_* OS env > DNSUPDATER_* in file
+// > legacy bare names in file (old .env keeps working) > defaults.
+// Bare OS env is never read: host vars like USERNAME (login name, always set
+// on Windows) must not override the file.
 func Load(ov Overrides) (*Config, error) {
-	env := map[string]string{}
+	file := map[string]string{}
 
 	// 1. .env file candidates.
 	candidates := []string{}
@@ -74,44 +78,47 @@ func Load(ov Overrides) (*Config, error) {
 		m, err := parseDotEnv(p)
 		if err == nil {
 			for k, v := range m {
-				if _, ok := env[k]; !ok {
-					env[k] = v
+				if _, ok := file[k]; !ok {
+					file[k] = v
 				}
 			}
 			break // first readable file wins
 		}
 	}
 
-	// 2. OS env overlays file.
-	for _, k := range []string{
-		"CPANEL_URL", "CPANEL_PORT", "USERNAME", "APIKEY", "DOMAIN", "TTL",
-		"GET_IP_URL", "GET_IP_URLS", "SUBDOMAIN",
-		"NTFY_SERVER", "NTFY_TOPIC", "NTFY_TOKEN",
-		"LOG_FILE", "STATE_FILE", "INTERVAL", "FORCE_REFRESH",
-		"DRY_RUN", "VERBOSE",
-	} {
-		if v, ok := os.LookupEnv(k); ok {
-			env[k] = v
+	// Resolução com prefixo (ver doc do Load).
+	get := func(names ...string) string {
+		if len(names) == 0 {
+			return ""
 		}
+		if v, ok := os.LookupEnv(names[0]); ok && strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+		for _, n := range names {
+			if v := strings.TrimSpace(file[n]); v != "" {
+				return v
+			}
+		}
+		return ""
 	}
 
 	cfg := &Config{
-		CpanelURL:    strings.TrimSpace(env["CPANEL_URL"]),
-		Username:     strings.TrimSpace(env["USERNAME"]),
-		APIKey:       strings.TrimSpace(env["APIKEY"]),
-		Domain:       strings.TrimSpace(env["DOMAIN"]),
-		Subdomain:    strings.TrimSpace(env["SUBDOMAIN"]),
-		NtfyServer:   strings.TrimRight(strings.TrimSpace(env["NTFY_SERVER"]), "/"),
-		NtfyTopic:    strings.TrimSpace(env["NTFY_TOPIC"]),
-		NtfyToken:    strings.TrimSpace(env["NTFY_TOKEN"]),
-		LogFile:      firstNonEmpty(ov.LogFile, strings.TrimSpace(env["LOG_FILE"]), DefaultLogFile()),
-		StateFile:    firstNonEmpty(ov.StateFile, strings.TrimSpace(env["STATE_FILE"]), defaultStateFile()),
+		CpanelURL:    get("DNSUPDATER_CPANEL_URL", "CPANEL_URL"),
+		Username:     get("DNSUPDATER_USERNAME", "USERNAME"),
+		APIKey:       get("DNSUPDATER_APIKEY", "APIKEY"),
+		Domain:       get("DNSUPDATER_DOMAIN", "DOMAIN"),
+		Subdomain:    get("DNSUPDATER_SUBDOMAIN", "SUBDOMAIN"),
+		NtfyServer:   strings.TrimRight(get("DNSUPDATER_NTFY_SERVER", "NTFY_SERVER"), "/"),
+		NtfyTopic:    get("DNSUPDATER_NTFY_TOPIC", "NTFY_TOPIC"),
+		NtfyToken:    get("DNSUPDATER_NTFY_TOKEN", "NTFY_TOKEN"),
+		LogFile:      firstNonEmpty(ov.LogFile, get("DNSUPDATER_LOG_FILE", "LOG_FILE"), DefaultLogFile()),
+		StateFile:    firstNonEmpty(ov.StateFile, get("DNSUPDATER_STATE_FILE", "STATE_FILE"), defaultStateFile()),
 		TTL:          300,
 		Interval:     5 * time.Minute,
 		ForceRefresh: time.Hour,
 	}
 
-	if v := strings.TrimSpace(env["CPANEL_PORT"]); v != "" {
+	if v := get("DNSUPDATER_CPANEL_PORT", "CPANEL_PORT"); v != "" {
 		p, err := strconv.Atoi(v)
 		if err != nil || p <= 0 || p > 65535 {
 			return nil, fmt.Errorf("CPANEL_PORT inválido: %q", v)
@@ -121,7 +128,7 @@ func Load(ov Overrides) (*Config, error) {
 		cfg.CpanelPort = 2083
 	}
 
-	if v := strings.TrimSpace(env["TTL"]); v != "" {
+	if v := get("DNSUPDATER_TTL", "TTL"); v != "" {
 		ttl, err := strconv.Atoi(v)
 		if err != nil || ttl <= 0 {
 			return nil, fmt.Errorf("TTL inválido: %q", v)
@@ -129,10 +136,13 @@ func Load(ov Overrides) (*Config, error) {
 		cfg.TTL = ttl
 	}
 
-	cfg.GetIPURLs = parseURLList(env["GET_IP_URLS"], env["GET_IP_URL"])
+	cfg.GetIPURLs = parseURLList(
+		get("DNSUPDATER_GET_IP_URLS", "GET_IP_URLS"),
+		get("DNSUPDATER_GET_IP_URL", "GET_IP_URL"),
+	)
 	if ov.Interval > 0 {
 		cfg.Interval = ov.Interval
-	} else if v := strings.TrimSpace(env["INTERVAL"]); v != "" {
+	} else if v := get("DNSUPDATER_INTERVAL", "INTERVAL"); v != "" {
 		d, err := parseDuration(v)
 		if err != nil {
 			return nil, fmt.Errorf("INTERVAL inválido: %q", v)
@@ -141,7 +151,7 @@ func Load(ov Overrides) (*Config, error) {
 	}
 	if ov.ForceRefresh > 0 {
 		cfg.ForceRefresh = ov.ForceRefresh
-	} else if v := strings.TrimSpace(env["FORCE_REFRESH"]); v != "" {
+	} else if v := get("DNSUPDATER_FORCE_REFRESH", "FORCE_REFRESH"); v != "" {
 		d, err := parseDuration(v)
 		if err != nil {
 			return nil, fmt.Errorf("FORCE_REFRESH inválido: %q", v)
@@ -151,9 +161,9 @@ func Load(ov Overrides) (*Config, error) {
 	if ov.DryRunSet {
 		cfg.DryRun = ov.DryRun
 	} else {
-		cfg.DryRun = parseBool(env["DRY_RUN"])
+		cfg.DryRun = parseBool(get("DNSUPDATER_DRY_RUN", "DRY_RUN"))
 	}
-	cfg.Verbose = ov.Verbose || parseBool(env["VERBOSE"])
+	cfg.Verbose = ov.Verbose || parseBool(get("DNSUPDATER_VERBOSE", "VERBOSE"))
 
 	if err := cfg.Validate(); err != nil {
 		return nil, err

@@ -44,22 +44,29 @@ make build
 
 ## Configuration (`.env`)
 
+Canonical names use the `DNSUPDATER_` prefix so they never collide with
+system vars (e.g. `USERNAME`, always set on Windows). Legacy bare names
+(`CPANEL_URL`, `USERNAME`, …) still work **in the file**; the `update_ip.sh`
+shim adds the prefixed form automatically when missing. The OS environment
+is only read with the prefix.
+
 | Var | Required | Default | Description |
 | --- | --- | --- | --- |
-| `CPANEL_URL` | yes | – | e.g. `https://cpanel.example.com` |
-| `CPANEL_PORT` | no | `2083` | appended when the URL has no port |
-| `USERNAME` / `APIKEY` | yes | – | cPanel UAPI credentials |
-| `DOMAIN` / `SUBDOMAIN` | yes | – | `SUBDOMAIN` may be short (`homeip`) or FQDN |
-| `TTL` | no | `300` | DNS TTL for add/edit |
-| `GET_IP_URLS` | no | amazon → ifconfig.me → icanhazip → ipify | comma/space separated fallback list (`GET_IP_URL` legacy single still works) |
-| `NTFY_SERVER` / `NTFY_TOPIC` / `NTFY_TOKEN` | no | – | all three or none (none = disabled) |
-| `LOG_FILE` | no | `/var/log/dnsupdater.log` (Unix), `./dnsupdater.log` (Windows) | falls back to local `dnsupdater.log` when unwritable |
-| `STATE_FILE` | no | user cache dir | set explicitly for cron-as-root consistency |
-| `INTERVAL` | no | `5m` | daemon loop interval |
-| `FORCE_REFRESH` | no | `1h` | re-check API even with unchanged IP |
-| `DRY_RUN` / `VERBOSE` | no | `false` | log without changing the zone / mirror INFO to stderr |
+| `DNSUPDATER_CPANEL_URL` | yes | – | e.g. `https://cpanel.example.com` |
+| `DNSUPDATER_CPANEL_PORT` | no | `2083` | appended when the URL has no port |
+| `DNSUPDATER_USERNAME` / `DNSUPDATER_APIKEY` | yes | – | cPanel UAPI credentials |
+| `DNSUPDATER_DOMAIN` / `DNSUPDATER_SUBDOMAIN` | yes | – | `SUBDOMAIN` may be short (`homeip`) or FQDN |
+| `DNSUPDATER_TTL` | no | `300` | DNS TTL for add/edit |
+| `DNSUPDATER_GET_IP_URLS` | no | amazon → ifconfig.me → icanhazip → ipify | comma/space separated fallback list |
+| `DNSUPDATER_NTFY_SERVER` / `DNSUPDATER_NTFY_TOPIC` / `DNSUPDATER_NTFY_TOKEN` | no | – | all three or none (none = disabled) |
+| `DNSUPDATER_LOG_FILE` | no | `/var/log/dnsupdater.log` (Unix), `./dnsupdater.log` (Windows) | falls back to local `dnsupdater.log` when unwritable |
+| `DNSUPDATER_STATE_FILE` | no | user cache dir | set explicitly for cron-as-root consistency |
+| `DNSUPDATER_INTERVAL` | no | `5m` | daemon loop interval |
+| `DNSUPDATER_FORCE_REFRESH` | no | `1h` | re-check API even with unchanged IP |
+| `DNSUPDATER_DRY_RUN` / `DNSUPDATER_VERBOSE` | no | `false` | log without changing the zone / mirror INFO to stderr |
 
-Precedence: CLI flags > OS env > `.env` file > defaults.
+Precedence per key: CLI flags > `DNSUPDATER_*` OS env > `DNSUPDATER_*` in
+`.env` > legacy bare names in `.env` > defaults.
 
 ## Usage
 
@@ -115,7 +122,7 @@ and run `./update_ip.sh` — it natively compiles for the local arch.
 
 | Symptom | Cause / fix |
 | --- | --- |
-| `parse_zone HTTP 403: Access denied` | API key invalid/expired or IP not allowlisted in cPanel; rotate key, check UAPI perms |
+| `parse_zone HTTP 403: Access denied` | API key invalid/expired, token without DNS privileges, IP not allowlisted (Host Access Control/cPHulk), **or wrong user**: a system `USERNAME` env var used to leak into auth — fixed, only `DNSUPDATER_*` env / `.env` are read |
 | `todos os providers falharam` | no outbound HTTP; check proxy/firewall (uses `HTTP(S)_PROXY`) |
 | `locked (... existe ...)` | previous run crashed; lock auto-expires in 10 min or delete `.lock_update` |
 | `ntfy parcial` | set all three `NTFY_*` or none |

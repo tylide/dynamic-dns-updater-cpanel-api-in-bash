@@ -85,6 +85,83 @@ func TestOverridesWin(t *testing.T) {
 	}
 }
 
+// RED: USERNAME do ambiente (login do sistema, sempre definido no Windows)
+// nunca sobrepõe o .env — era a causa do 403 com token bom.
+func TestUsernameIgnoresBareEnv(t *testing.T) {
+	isolateEnv(t)
+	t.Setenv("USERNAME", "dark")
+	p := writeEnv(t, baseEnv()) // USERNAME=u
+	cfg, err := config.Load(config.Overrides{ConfigPath: p})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Username != "u" {
+		t.Fatalf("username = %q, esperava o do .env", cfg.Username)
+	}
+}
+
+// RED: DNSUPDATER_USERNAME explícito ganha do .env (override p/ automação).
+func TestDNSUpdaterUsernameOverride(t *testing.T) {
+	isolateEnv(t)
+	t.Setenv("USERNAME", "dark")
+	t.Setenv("DNSUPDATER_USERNAME", "explicito")
+	p := writeEnv(t, baseEnv()) // USERNAME=u
+	cfg, err := config.Load(config.Overrides{ConfigPath: p})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Username != "explicito" {
+		t.Fatalf("username = %q", cfg.Username)
+	}
+}
+
+// RED: .env só com chaves prefixadas funciona (formato canónico novo).
+func TestPrefixedFileKeys(t *testing.T) {
+	isolateEnv(t)
+	p := writeEnv(t, "DNSUPDATER_CPANEL_URL=https://cpanel.exemplo.com\n"+
+		"DNSUPDATER_CPANEL_PORT=2083\n"+
+		"DNSUPDATER_USERNAME=u\n"+
+		"DNSUPDATER_APIKEY=k\n"+
+		"DNSUPDATER_DOMAIN=exemplo.pt\n"+
+		"DNSUPDATER_SUBDOMAIN=homeip\n")
+	cfg, err := config.Load(config.Overrides{ConfigPath: p})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Username != "u" || cfg.Domain != "exemplo.pt" || cfg.FQDN() != "homeip.exemplo.pt" {
+		t.Fatalf("cfg = %+v", cfg)
+	}
+}
+
+// RED: DNSUPDATER_* do ambiente ganha do legado no ficheiro.
+func TestPrefixedEnvBeatsLegacyFile(t *testing.T) {
+	isolateEnv(t)
+	t.Setenv("DNSUPDATER_DOMAIN", "novo.pt")
+	p := writeEnv(t, baseEnv()) // DOMAIN=exemplo.pt
+	cfg, err := config.Load(config.Overrides{ConfigPath: p})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Domain != "novo.pt" {
+		t.Fatalf("domain = %q", cfg.Domain)
+	}
+}
+
+// RED: bare do ambiente é ignorado para todas as chaves (anti-colisão).
+func TestBareEnvIgnored(t *testing.T) {
+	isolateEnv(t)
+	t.Setenv("DOMAIN", "evil.pt")
+	t.Setenv("USERNAME", "dark")
+	p := writeEnv(t, baseEnv())
+	cfg, err := config.Load(config.Overrides{ConfigPath: p})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Domain != "exemplo.pt" || cfg.Username != "u" {
+		t.Fatalf("bare env vazou: %+v", cfg)
+	}
+}
+
 // RED: FQDN cobre @, short, FQDN com ponto.
 func TestFQDNVariants(t *testing.T) {
 	isolateEnv(t)
