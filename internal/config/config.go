@@ -248,13 +248,18 @@ func parseURLList(plurals, legacy string) []string {
 		seen[raw] = true
 		out = append(out, raw)
 	}
-	for _, p := range strings.Split(plurals, ",") {
-		for _, q := range strings.Fields(p) {
-			add(q)
+	// Aceita vírgulas e/ou espaços em ambos: uma lista colada na chave
+	// singular (GET_IP_URL=..., ...) também tem de funcionar.
+	addMany := func(s string) {
+		for _, p := range strings.Split(s, ",") {
+			for _, q := range strings.Fields(p) {
+				add(q)
+			}
 		}
 	}
-	if len(out) == 0 && strings.TrimSpace(legacy) != "" {
-		add(strings.TrimSpace(legacy))
+	addMany(plurals)
+	if len(out) == 0 {
+		addMany(legacy)
 	}
 	if len(out) == 0 {
 		out = append(out, DefaultGetIPURLs...)

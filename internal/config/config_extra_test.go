@@ -162,6 +162,20 @@ func TestBareEnvIgnored(t *testing.T) {
 	}
 }
 
+// RED: legado singular com lista também divide (regressão valhalla:
+// lista colada em GET_IP_URL era tratada como 1 URL e falhava tudo).
+func TestLegacySingularList(t *testing.T) {
+	isolateEnv(t)
+	p := writeEnv(t, baseEnv()+"GET_IP_URL=https://a.example, https://b.example https://c.example\n")
+	cfg, err := config.Load(config.Overrides{ConfigPath: p})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.GetIPURLs) != 3 {
+		t.Fatalf("urls = %v", cfg.GetIPURLs)
+	}
+}
+
 // RED: FQDN cobre @, short, FQDN com ponto.
 func TestFQDNVariants(t *testing.T) {
 	isolateEnv(t)
