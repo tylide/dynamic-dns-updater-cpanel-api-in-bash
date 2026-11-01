@@ -11,9 +11,10 @@ public IP. No `curl`/`jq`/`dig` needed at runtime — just the binary and a
 
 ## How it works
 
-1. Gets the public IP trying each provider in order
-   (`checkip.amazonaws.com` → `ifconfig.me/ip` → `icanhazip.com` →
-   `api.ipify.org`), first valid answer wins.
+1. Gets the public IP trying each provider in order (15 known-good plaintext
+   endpoints: amazon, ifconfig.me, icanhazip, ipify, ident.me, ifconfig.co,
+   ipinfo, wtfismyip, ipecho, l2.io, myexternalip, ifconfig.io…;
+   `{"ip":"..."}` JSON answers are accepted too), first valid answer wins.
 2. Short-circuit: if the IP is unchanged since the last successful sync
    (see `state.json`), it exits without hitting the cPanel API. A periodic
    `force-refresh` (default 1h) re-checks anyway to catch manual edits.
@@ -62,7 +63,7 @@ shim renames them to `DNSUPDATER_*` in place on first run (backup in
 | `DNSUPDATER_USERNAME` / `DNSUPDATER_APIKEY` | yes | – | cPanel UAPI credentials |
 | `DNSUPDATER_DOMAIN` / `DNSUPDATER_SUBDOMAIN` | yes | – | `SUBDOMAIN` may be short (`homeip`) or FQDN |
 | `DNSUPDATER_TTL` | no | `300` | DNS TTL for add/edit |
-| `DNSUPDATER_GET_IP_URLS` | no | amazon → ifconfig.me → icanhazip → ipify | comma/space separated fallback list |
+| `DNSUPDATER_GET_IP_URLS` | no | 15 tested endpoints (amazon, ifconfig.me, icanhazip, ipify, ident.me, …) | comma/space separated fallback list |
 | `DNSUPDATER_NTFY_SERVER` / `DNSUPDATER_NTFY_TOPIC` / `DNSUPDATER_NTFY_TOKEN` | no | – | all three or none (none = disabled) |
 | `DNSUPDATER_LOG_FILE` | no | `/var/log/dnsupdater.log` (Unix), `./dnsupdater.log` (Windows) | falls back to local `dnsupdater.log` when unwritable |
 | `DNSUPDATER_STATE_FILE` | no | user cache dir | set explicitly for cron-as-root consistency |

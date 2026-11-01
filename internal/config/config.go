@@ -51,6 +51,17 @@ var DefaultGetIPURLs = []string{
 	"https://ifconfig.me/ip",
 	"https://icanhazip.com",
 	"https://api.ipify.org",
+	"https://v4.ident.me",
+	"https://ident.me",
+	"https://ifconfig.co/ip",
+	"https://ipinfo.io/ip",
+	"https://wtfismyip.com/text",
+	"https://ipecho.net/plain",
+	"https://l2.io/ip",
+	"https://myexternalip.com/raw",
+	"https://ipv4.icanhazip.com",
+	"https://ifconfig.io/ip",
+	"https://api.ipify.org?format=json", // JSON {"ip":"..."} também é aceite
 }
 
 // Load reads .env file + OS env and applies overrides.

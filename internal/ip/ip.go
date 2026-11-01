@@ -2,6 +2,7 @@ package ip
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/netip"
@@ -46,8 +47,18 @@ func fetchOne(ctx context.Context, url string, perTry time.Duration) (string, er
 	if err != nil {
 		return "", err
 	}
-	// Providers return plain text, sometimes with newline.
+	// Providers return plain text, sometimes with newline. Some answer JSON
+	// like {"ip":"1.2.3.4"} — accept that too so any known provider works.
 	candidate := strings.TrimSpace(string(body))
+	if strings.HasPrefix(candidate, "{") {
+		var obj struct {
+			IP string `json:"ip"`
+		}
+		if err := json.Unmarshal([]byte(candidate), &obj); err == nil && strings.TrimSpace(obj.IP) != "" {
+			candidate = strings.TrimSpace(obj.IP)
+		}
+	}
+	candidate = strings.Trim(candidate, `"'`)
 	// Take first line/field in case of extra text.
 	if i := strings.IndexAny(candidate, " \t\r\n"); i >= 0 {
 		candidate = strings.TrimSpace(candidate[:i])

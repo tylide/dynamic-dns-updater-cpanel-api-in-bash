@@ -49,6 +49,38 @@ func TestGetPublicIPRejectsHTML(t *testing.T) {
 	}
 }
 
+// RED: corpo JSON {"ip":"..."} também é aceite (ex: api.ipify.org?format=json).
+func TestGetPublicIPJSON(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"ip":"203.0.113.9"}`))
+	}))
+	defer srv.Close()
+
+	got, _, err := ip.GetPublicIP(context.Background(), []string{srv.URL}, 2*time.Second)
+	if err != nil {
+		t.Fatalf("JSON: %v", err)
+	}
+	if got != "203.0.113.9" {
+		t.Fatalf("ip = %q", got)
+	}
+}
+
+// RED: IP entre aspas é aceite.
+func TestGetPublicIPQuoted(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("\"203.0.113.10\"\n"))
+	}))
+	defer srv.Close()
+
+	got, _, err := ip.GetPublicIP(context.Background(), []string{srv.URL}, 2*time.Second)
+	if err != nil {
+		t.Fatalf("quoted: %v", err)
+	}
+	if got != "203.0.113.10" {
+		t.Fatalf("ip = %q", got)
+	}
+}
+
 // RED: todos falham -> erro agregado.
 func TestGetPublicIPAllFail(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
